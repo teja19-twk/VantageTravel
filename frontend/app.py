@@ -10,11 +10,7 @@ from pathlib import Path
 # =====================================================================
 # PATH & SYSTEM SETUP
 # =====================================================================
-FRONTEND_DIR = Path(__file__).resolve().parent
-BACKEND_DIR = FRONTEND_DIR.parent / "Backend"
-
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
+API_BASE_URL = "https://vantagetravel-1.onrender.com"
 
 import importlib
 
