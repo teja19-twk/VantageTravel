@@ -1,6 +1,5 @@
-# Frontend Requirements for VantageTravel Streamlit Application (app.py)
+# Requirements for VantageTravel Streamlit Application (Streamlit Cloud Deployment)
 
-# Direct Frontend UI, Visualization & Data Processing
 streamlit>=1.30.0
 plotly>=5.18.0
 pandas>=2.0.0
@@ -9,7 +8,6 @@ requests>=2.31.0
 httpx>=0.25.0
 
 # Backend & ML Model Integration Dependencies
-# (Required when app.py loads Backend modules & ML models directly)
 scikit-learn>=1.3.0
 xgboost>=2.0.0
 joblib>=1.3.0
