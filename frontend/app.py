@@ -750,8 +750,8 @@ if page == "🏛️ DOMAIN":
     # TAB 3: SYSTEM ARCHITECTURE
     # -----------------------------------------------------------------
     with tab_arch:
-        st.subheader("🏗️ End-to-End System Architecture Workflow (10-Step Sequential Pipeline)")
-        st.caption("Interactive 10-Step Technical Data-to-User Execution Flow:")
+        st.subheader("🏗️ End-to-End System Architecture Workflow ")
+        st.caption("Interactive 8-Step Technical Data-to-User Execution Flow:")
 
         arch_html = """
         <!DOCTYPE html>
