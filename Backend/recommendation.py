@@ -177,8 +177,20 @@ def get_nearby_amenities(spot_name: str, district: str, lat: float, lon: float) 
             else acc_df
         )
         for _, r in dist_acc.iterrows():
-            a_lat = float(r.get("lat", lat + 0.01))
-            a_lon = float(r.get("lon", lon + 0.01))
+            try:
+                a_lat = float(r.get("lat"))
+                if math.isnan(a_lat) or a_lat == 0:
+                    a_lat = lat + 0.008
+            except Exception:
+                a_lat = lat + 0.008
+
+            try:
+                a_lon = float(r.get("lon"))
+                if math.isnan(a_lon) or a_lon == 0:
+                    a_lon = lon + 0.006
+            except Exception:
+                a_lon = lon + 0.006
+
             dist_km = calculate_distance_km(lat, lon, a_lat, a_lon)
             results["hotels"].append({
                 "name": str(r.get("name", "Hotel")),
@@ -204,8 +216,19 @@ def get_nearby_amenities(spot_name: str, district: str, lat: float, lon: float) 
 
         for _, r in matched_am.iterrows():
             am_type = str(r.get("amenity_type", "restaurant")).lower()
-            a_lat = float(r.get("lat", lat + 0.005))
-            a_lon = float(r.get("lon", lon + 0.005))
+            try:
+                a_lat = float(r.get("lat"))
+                if math.isnan(a_lat) or a_lat == 0:
+                    a_lat = lat + 0.005
+            except Exception:
+                a_lat = lat + 0.005
+
+            try:
+                a_lon = float(r.get("lon"))
+                if math.isnan(a_lon) or a_lon == 0:
+                    a_lon = lon + 0.005
+            except Exception:
+                a_lon = lon + 0.005
             dist_km = calculate_distance_km(lat, lon, a_lat, a_lon)
 
             item = {
