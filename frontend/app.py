@@ -7,283 +7,32 @@ import numpy as np
 import streamlit as st
 from pathlib import Path
 
-FRONTEND_DIR = Path(__file__).resolve().parent
-BACKEND_DIR = FRONTEND_DIR.parent / "Backend"
-
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
+# =====================================================================
+# PATH & SYSTEM SETUP
+# =====================================================================
+API_BASE_URL = "https://vantagetravel-1.onrender.com"
 
 import importlib
 
-# ============================================================
-# RENDER BACKEND API
-# ============================================================
-
-API_BASE_URL = "https://vantagetravel-1.onrender.com"
-
-# ============================================================
-# BACKEND IMPORTS
-# ============================================================
-
-BACKEND_AVAILABLE = False
-BACKEND_ERROR = ""
-
-def normalize_text(value):
-    if value is None:
-        return ""
-    return " ".join(str(value).strip().lower().split())
-
-
+# Import existing backend modules directly for seamless execution
 try:
     import database.schemas
     import predict
     import recommendation
-
     importlib.reload(recommendation)
     importlib.reload(predict)
 
-    from database.schemas import (
-        TripBudgetInput,
-        VisitorInput,
-        ClimateInput
-    )
-
-    from predict import (
-        predict_trip_budget,
-        predict_visitors,
-        predict_climate
-    )
-
-    from recommendation import (
-        get_all_districts,
-        get_spots,
-        get_nearby_amenities,
-        recommend_places
-    )
-
+    from database.schemas import TripBudgetInput, VisitorInput, ClimateInput
+    from predict import predict_trip_budget, predict_visitors, predict_climate
+    from recommendation import get_all_districts, get_spots, get_nearby_amenities, recommend_places
     BACKEND_AVAILABLE = True
-
 except Exception as e:
     BACKEND_AVAILABLE = False
     BACKEND_ERROR = str(e)
 
-    from dataclasses import dataclass, asdict
-
-    @dataclass
-    class ClimateInput:
-        district: str = "Hyderabad"
-        month: int = 7
-        temperature: float = 0.0
-        humidity: float = 0.0
-        rainfall: float = 0.0
-
-        def dict(self):
-            return asdict(self)
-
-    @dataclass
-    class VisitorInput:
-        place_name: str = "Charminar"
-        district: str = "Hyderabad"
-        month: int = 7
-        season: str = "Monsoon"
-
-        def dict(self):
-            return asdict(self)
-
-    @dataclass
-    class TripBudgetInput:
-        duration_days: int = 3
-        num_travelers: int = 2
-        route_distance_km: float = 150.0
-        transport_mode: str = "car"
-        accommodation_tier: str = "standard"
-        season: str = "Monsoon"
-        stay_cost_est: float = 0.0
-        food_cost_est: float = 0.0
-        entry_fees_est: float = 0.0
-        tolls_and_parking_est: float = 0.0
-
-        def dict(self):
-            return asdict(self)
-
-    def predict_climate(data):
-        try:
-            payload = data.dict() if hasattr(data, "dict") else data
-            r = requests.post(f"{API_BASE_URL}/api/predict/climate", json=payload, timeout=5)
-            if r.status_code == 200:
-                return r.json()
-        except Exception:
-            pass
-        return {
-            "district": getattr(data, "district", "Hyderabad"),
-            "month": getattr(data, "month", 7),
-            "predicted_max_temp_c": 31.0,
-            "predicted_min_temp_c": 23.0,
-            "rain_probability_percent": 80.0,
-            "weather_condition": "Rainy",
-            "travel_advisory": "High rainfall expected. Carry umbrellas and plan indoor alternatives.",
-            "status": "success"
-        }
-
-    def predict_visitors(data):
-        try:
-            payload = data.dict() if hasattr(data, "dict") else data
-            r = requests.post(f"{API_BASE_URL}/api/predict/visitors", json=payload, timeout=5)
-            if r.status_code == 200:
-                return r.json()
-        except Exception:
-            pass
-        return {
-            "place_name": getattr(data, "place_name", "Charminar"),
-            "district": getattr(data, "district", "Hyderabad"),
-            "month": getattr(data, "month", 7),
-            "season": getattr(data, "season", "Monsoon"),
-            "predicted_visitors": 17371,
-            "crowd_density": "Moderate Crowd",
-            "recommended_time": "Comfortable visiting window. Afternoon tours recommended.",
-            "status": "success"
-        }
-
-    def predict_trip_budget(data):
-        try:
-            payload = data.dict() if hasattr(data, "dict") else data
-            r = requests.post(f"{API_BASE_URL}/api/predict/budget", json=payload, timeout=5)
-            if r.status_code == 200:
-                return r.json()
-        except Exception:
-            pass
-        dur = getattr(data, "duration_days", 3)
-        trv = getattr(data, "num_travelers", 2)
-        total = round(dur * trv * 2200.0, 2)
-        return {
-            "duration_days": dur,
-            "num_travelers": trv,
-            "transport_mode": getattr(data, "transport_mode", "Cab"),
-            "accommodation_tier": getattr(data, "accommodation_tier", "Standard"),
-            "stay_cost": round(total * 0.45, 2),
-            "food_cost": round(total * 0.28, 2),
-            "transport_cost": round(total * 0.20, 2),
-            "entry_fees": round(total * 0.07, 2),
-            "estimated_total_budget": total,
-            "per_person_cost": round(total / max(trv, 1), 2),
-            "status": "success"
-        }
-
-    def recommend_places(selected_spot=None, district=None, category=None, season=None, budget=0.0, crowd=0, transport="car"):
-        try:
-            payload = {
-                "selected_spot": selected_spot,
-                "district": district,
-                "category": category,
-                "season": season,
-                "budget": budget,
-                "crowd": crowd,
-                "transport": transport
-            }
-            r = requests.post(f"{API_BASE_URL}/api/recommendations", json=payload, timeout=5)
-            if r.status_code == 200 and "recommendations" in r.json():
-                return r.json()["recommendations"]
-        except Exception:
-            pass
-        return [
-            {
-                "spot_name": "Chowmahalla Palace",
-                "district": "Hyderabad",
-                "category": "Heritage & Palace",
-                "rating": 4.6,
-                "reviews": 9800,
-                "entry_fee": 80.0,
-                "estimated_budget": 1200.0,
-                "similarity_match_percent": 95.0,
-                "distance_from_selected_km": 1.8
-            },
-            {
-                "spot_name": "Golconda Fort",
-                "district": "Hyderabad",
-                "category": "Fort & Heritage",
-                "rating": 4.6,
-                "reviews": 15200,
-                "entry_fee": 25.0,
-                "estimated_budget": 1500.0,
-                "similarity_match_percent": 90.0,
-                "distance_from_selected_km": 11.2
-            }
-        ]
-
-    def get_all_districts():
-        try:
-            r = requests.get(f"{API_BASE_URL}/api/districts", timeout=5)
-            if r.status_code == 200 and "districts" in r.json():
-                return r.json()["districts"]
-        except Exception:
-            pass
-        return ["Hyderabad", "Bhadradri Kothagudem", "Warangal", "Karimnagar", "Nizamabad", "Adilabad"]
-
-    def get_spots(district=None, category=None):
-        try:
-            params = {}
-            if district and normalize_text(district) != "all":
-                params["district"] = district
-            if category and normalize_text(category) != "all":
-                params["category"] = category
-            r = requests.get(f"{API_BASE_URL}/api/spots", params=params, timeout=5)
-            if r.status_code == 200 and "spots" in r.json():
-                res_spots = r.json()["spots"]
-                if res_spots:
-                    return res_spots
-        except Exception:
-            pass
-
-        all_default_spots = [
-            {"name": "Charminar", "district": "Hyderabad", "category": "Heritage & Monument", "rating": 4.5, "reviews": 12500, "entry_fee": 25.0, "lat": 17.3616, "lon": 78.4747},
-            {"name": "Chowmahalla Palace", "district": "Hyderabad", "category": "Heritage & Palace", "rating": 4.6, "reviews": 9800, "entry_fee": 80.0, "lat": 17.3585, "lon": 78.4716},
-            {"name": "Golconda Fort", "district": "Hyderabad", "category": "Fort & Heritage", "rating": 4.6, "reviews": 15200, "entry_fee": 25.0, "lat": 17.3833, "lon": 78.4011},
-            {"name": "Hussain Sagar Lake", "district": "Hyderabad", "category": "Lake & Promenade", "rating": 4.4, "reviews": 18000, "entry_fee": 0.0, "lat": 17.4239, "lon": 78.4738},
-            {"name": "Birla Mandir", "district": "Hyderabad", "category": "Temple & Spiritual", "rating": 4.7, "reviews": 11000, "entry_fee": 0.0, "lat": 17.4062, "lon": 78.4691},
-            {"name": "Kinnerasani Wildlife Sanctuary", "district": "Bhadradri Kothagudem", "category": "Wildlife & Lake", "rating": 4.5, "reviews": 3800, "entry_fee": 30.0, "lat": 17.6833, "lon": 80.6500},
-            {"name": "Pakhal Lake & Wildlife Sanctuary", "district": "Warangal", "category": "Nature & Lake", "rating": 4.4, "reviews": 3200, "entry_fee": 20.0, "lat": 17.9500, "lon": 79.8833},
-            {"name": "Ramappa Temple", "district": "Warangal", "category": "UNESCO World Heritage Temple", "rating": 4.8, "reviews": 8900, "entry_fee": 20.0, "lat": 18.2583, "lon": 79.9403},
-            {"name": "Thousand Pillar Temple", "district": "Warangal", "category": "Heritage Temple", "rating": 4.6, "reviews": 7500, "entry_fee": 10.0, "lat": 17.9865, "lon": 79.5303},
-            {"name": "Warangal Fort", "district": "Warangal", "category": "Fort & Ruins", "rating": 4.5, "reviews": 6400, "entry_fee": 25.0, "lat": 17.9554, "lon": 79.6178},
-            {"name": "Elgandal Fort", "district": "Karimnagar", "category": "Historical Fort", "rating": 4.3, "reviews": 2100, "entry_fee": 15.0, "lat": 18.4233, "lon": 79.0345},
-            {"name": "Lower Manair Dam", "district": "Karimnagar", "category": "Dam & Reservoir", "rating": 4.2, "reviews": 1800, "entry_fee": 0.0, "lat": 18.4111, "lon": 79.1301},
-            {"name": "Kondagattu Anjaneya Swamy Temple", "district": "Karimnagar", "category": "Pilgrimage Temple", "rating": 4.7, "reviews": 8500, "entry_fee": 0.0, "lat": 18.6631, "lon": 78.9328},
-            {"name": "Nizamabad Fort", "district": "Nizamabad", "category": "Hilltop Fort", "rating": 4.3, "reviews": 1900, "entry_fee": 10.0, "lat": 18.6725, "lon": 78.0941},
-            {"name": "Ali Sagar Reservoir", "district": "Nizamabad", "category": "Park & Reservoir", "rating": 4.1, "reviews": 1400, "entry_fee": 15.0, "lat": 18.6412, "lon": 78.0211},
-            {"name": "Kuntala Waterfalls", "district": "Adilabad", "category": "Waterfalls & Nature", "rating": 4.6, "reviews": 5400, "entry_fee": 20.0, "lat": 19.2667, "lon": 78.5000},
-            {"name": "Pochera Waterfalls", "district": "Adilabad", "category": "Waterfalls & Nature", "rating": 4.5, "reviews": 4100, "entry_fee": 15.0, "lat": 19.3167, "lon": 78.4333},
-            {"name": "Kawal Tiger Reserve", "district": "Adilabad", "category": "Wildlife Sanctuary", "rating": 4.3, "reviews": 2300, "entry_fee": 50.0, "lat": 19.2000, "lon": 78.9500}
-        ]
-
-        if district and normalize_text(district) != "all":
-            target = normalize_text(district)
-            filtered = [s for s in all_default_spots if normalize_text(s["district"]) == target]
-            return filtered if filtered else all_default_spots
-
-        return all_default_spots
-
-    def get_nearby_amenities(spot_name, district="Hyderabad", lat=17.3850, lon=78.4867):
-        try:
-            params = {"spot_name": spot_name, "district": district, "lat": lat, "lon": lon}
-            r = requests.get(f"{API_BASE_URL}/api/amenities", params=params, timeout=5)
-            if r.status_code == 200 and "amenities" in r.json():
-                return r.json()["amenities"]
-        except Exception:
-            pass
-        return {
-            "hotels": [{"name": f"Grand Hotel Near {spot_name}", "type": "hotel", "rating": 4.5, "distance_km": 0.8}],
-            "restaurants": [{"name": f"Royal Dining Near {spot_name}", "type": "restaurant", "rating": 4.4, "distance_km": 0.4}],
-            "atms": [{"name": "State Bank ATM", "type": "atm", "rating": 4.2, "distance_km": 0.3}],
-            "hospitals": [{"name": "City Care Hospital", "type": "hospital", "rating": 4.6, "distance_km": 1.2}],
-            "parking": [{"name": "Tourist Parking Zone", "type": "parking", "rating": 4.1, "distance_km": 0.2}],
-            "petrol_pumps": [{"name": "Indian Oil Station", "type": "petrol_pump", "rating": 4.3, "distance_km": 1.5}],
-            "restrooms": [{"name": "Public Clean Restroom", "type": "restroom", "rating": 4.0, "distance_km": 0.1}]
-        }
-
-# ============================================================
-# STREAMLIT PAGE CONFIGURATION
-# ============================================================
-
+# =====================================================================
+# STREAMLIT PAGE CONFIGURATION & CUSTOM STYLING
+# =====================================================================
 st.set_page_config(
     page_title="VantageTravel - AI Smart Tourism Platform",
     page_icon="🗺️",
@@ -291,83 +40,234 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ============================================================
-# CUSTOM STYLING
-# ============================================================
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-st.markdown(
-    """
-    <style>
+    html, body, [class*="css"] {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    /* ---------- Blue & White Theme Canvas ---------- */
     .stApp {
-        background: linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 35%, #EFF6FF 55%, #2563EB 80%, #1E3A8A 100%) !important;
-        background-attachment: fixed !important;
+        background: radial-gradient(circle at 20% 0%, #FFFFFF 0%, #F8FAFC 50%, #EFF6FF 100%) !important;
+        color: #0F172A !important;
     }
 
-    .card {
-        padding: 20px;
-        border-radius: 12px;
-        border: 1px solid #E5E7EB;
-        margin-bottom: 15px;
-        background-color: #FFFFFF;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    /* ---------- PURE WHITE SIDEBAR (70% White + 30% Royal Blue) ---------- */
+    section[data-testid="stSidebar"],
+    div[data-testid="stSidebarUserContent"],
+    div[data-testid="stSidebarContent"] {
+        background-color: #FFFFFF !important;
+        background: #FFFFFF !important;
+        border-right: 1.5px solid #E2E8F0 !important;
     }
 
+    /* All text inside sidebar in Royal Navy Blue */
+    section[data-testid="stSidebar"] *,
+    div[data-testid="stSidebarUserContent"] *,
+    div[data-testid="stSidebar"] span,
+    div[data-testid="stSidebar"] p,
+    div[data-testid="stSidebar"] div,
+    div[data-testid="stSidebar"] label {
+        color: #1E3A8A !important;
+        font-weight: 600 !important;
+    }
+
+    /* Brand caption & eyebrow in sidebar */
+    .brand-name {
+        color: #1E3A8A !important;
+        font-weight: 800 !important;
+    }
+    .brand-caption {
+        color: #2563EB !important;
+        font-weight: 500 !important;
+    }
+
+    /* Hide radio button circles in Sidebar */
+    div[role="radiogroup"] label > div:first-child,
+    div[role="radiogroup"] input[type="radio"] {
+        display: none !important;
+    }
+
+    /* Equal-Sized Navigation Option Boxes in Sidebar */
+    div[role="radiogroup"] {
+        gap: 8px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        width: 100% !important;
+    }
+    div[role="radiogroup"] label {
+        background-color: #F8FAFC !important;
+        border: 1.5px solid #DBEAFE !important;
+        border-radius: 10px !important;
+        padding: 0.75rem 1rem !important;
+        margin-bottom: 0.2rem !important;
+        color: #1E3A8A !important;
+        width: 100% !important;
+        height: 48px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        box-sizing: border-box !important;
+        cursor: pointer !important;
+        font-size: 0.95rem !important;
+        font-weight: 700 !important;
+        transition: all 0.2s ease-in-out !important;
+        box-shadow: 0 2px 6px rgba(37, 99, 235, 0.05) !important;
+    }
+    div[role="radiogroup"] label:hover {
+        background-color: #EFF6FF !important;
+        border-color: #2563EB !important;
+        color: #2563EB !important;
+        transform: translateX(3px) !important;
+    }
+    /* Active Selected Navigation Option Box */
+    div[role="radiogroup"] label[aria-checked="true"],
+    div[role="radiogroup"] label:has(input:checked) {
+        background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
+        border-color: #1D4ED8 !important;
+        color: #FFFFFF !important;
+        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35) !important;
+    }
+    div[role="radiogroup"] label[aria-checked="true"] *,
+    div[role="radiogroup"] label:has(input:checked) * {
+        color: #FFFFFF !important;
+    }
+
+    /* ---------- Headings (Deep Royal Navy Blue) ---------- */
     .main-header {
-        font-size: 2.2rem;
+        font-family: 'Playfair Display', serif;
+        font-size: 2.7rem;
         font-weight: 800;
-        color: #1E3A8A;
-        margin-top: 5px;
-        margin-bottom: 6px;
-        line-height: 1.25;
-        letter-spacing: -0.01em;
+        background: linear-gradient(135deg, #1E3A8A 0%, #2563EB 50%, #1D4ED8 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.3rem;
     }
-
     .sub-header {
-        font-size: 1.15rem;
+        font-size: 1.1rem;
+        color: #334155;
+        margin-bottom: 1.6rem;
+        line-height: 1.5;
         font-weight: 600;
-        color: #4B5563;
-        margin-bottom: 20px;
-        line-height: 1.4;
     }
 
+    /* ---------- Cards & Containers (Pure Crisp White with Royal Blue Border) ---------- */
+    .card {
+        background: #FFFFFF !important;
+        border: 1px solid #E2E8F0 !important;
+        border-left: 5px solid #2563EB !important;
+        border-radius: 14px !important;
+        padding: 1.25rem !important;
+        margin-bottom: 1rem !important;
+        box-shadow: 0 6px 20px rgba(37, 99, 235, 0.08) !important;
+        color: #0F172A !important;
+    }
+    .card h4 {
+        color: #1E3A8A !important;
+        margin-top: 0 !important;
+        font-family: 'Playfair Display', serif !important;
+        font-weight: 700 !important;
+    }
+    .card p, .card li, .card span {
+        color: #334155 !important;
+    }
+
+    .metric-card {
+        background: linear-gradient(135deg, #FFFFFF 0%, #EFF6FF 100%) !important;
+        border-radius: 12px !important;
+        padding: 1.1rem !important;
+        text-align: center !important;
+        border: 1px solid #BFDBFE !important;
+        box-shadow: 0 4px 15px rgba(37, 99, 235, 0.1) !important;
+    }
+    .metric-value {
+        font-family: 'Playfair Display', serif !important;
+        font-size: 1.9rem !important;
+        font-weight: 800 !important;
+        color: #1D4ED8 !important;
+    }
+    .metric-label {
+        font-size: 0.9rem !important;
+        color: #1E3A8A !important;
+        font-weight: 600 !important;
+    }
+
+    /* Disclaimer Box in Warm Royal Amber & Blue */
     .disclaimer-box {
-        padding: 15px;
-        border-radius: 10px;
-        background-color: #FFF7ED;
-        border: 1px solid #FDBA74;
-        margin-bottom: 20px;
+        background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%) !important;
+        border-left: 5px solid #D97706 !important;
+        padding: 1rem 1.2rem !important;
+        border-radius: 8px !important;
+        color: #78350F !important;
+        font-weight: 600 !important;
+        margin-bottom: 1.5rem !important;
+        box-shadow: 0 4px 15px rgba(217, 119, 6, 0.12) !important;
     }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
 
-# ============================================================
-# SIDEBAR
-# ============================================================
+    /* ---------- Input Widgets & Selectboxes (Pure White Fill + Royal Blue Border) ---------- */
+    div[data-baseweb="select"] > div,
+    div[data-testid="stNumberInput"] input,
+    div[data-testid="stTextInput"] input,
+    div[data-baseweb="input"] input {
+        background-color: #FFFFFF !important;
+        border-color: #93C5FD !important;
+        color: #0F172A !important;
+        border-radius: 8px !important;
+    }
 
+    /* Streamlit Metric Overrides */
+    div[data-testid="stMetricValue"] {
+        color: #1D4ED8 !important;
+    }
+    div[data-testid="stMetricLabel"] {
+        color: #1E3A8A !important;
+    }
+
+    /* Primary Buttons in Royal Blue */
+    .stButton > button {
+        background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
+        color: #FFFFFF !important;
+        font-weight: 800 !important;
+        border: none !important;
+        border-radius: 10px !important;
+        padding: 0.6rem 1.2rem !important;
+        box-shadow: 0 4px 15px rgba(37, 99, 235, 0.35) !important;
+        transition: all 0.2s ease !important;
+    }
+    .stButton > button:hover {
+        background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%) !important;
+        color: #FFFFFF !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 6px 22px rgba(37, 99, 235, 0.5) !important;
+    }
+
+    hr {
+        border-color: #E2E8F0 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+
+# =====================================================================
+# SIDEBAR NAVIGATION (Strictly 3 Pages)
+# =====================================================================
 LOGO_PATH = FRONTEND_DIR / "logo.png"
-
 if LOGO_PATH.exists():
     st.sidebar.image(str(LOGO_PATH), width=180)
 else:
-    st.sidebar.image(
-        "https://img.icons8.com/color/96/compass--v1.png",
-        width=70
-    )
-
+    st.sidebar.image("https://img.icons8.com/color/96/compass--v1.png", width=70)
 st.sidebar.title("VantageTravel")
 st.sidebar.caption("Intelligent Travel & ML Analytics")
 
 page = st.sidebar.radio(
     "Navigation",
-    [
-        "🏠 Home",
-        "📊 Project Overview",
-        "✨ Predictions"
-    ],
+    ["🏠 Home", "📊 Project Overview", "✨ Predictions"],
     index=0
 )
+
+
 # =====================================================================
 # PAGE 1: 🏠 HOME
 # =====================================================================
@@ -440,7 +340,7 @@ if page == "🏠 Home":
 # PAGE 2: 📊 PROJECT OVERVIEW
 # =====================================================================
 elif page == "📊 Project Overview":
-    st.markdown('<div class="main-header">📊 Project Overview</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">Project Overview</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-header">VantageTravel Technical Architecture, Datasets, EDA, Preprocessing & Machine Learning Pipeline</div>', unsafe_allow_html=True)
 
     # -----------------------------------------------------------------
@@ -673,7 +573,7 @@ elif page == "📊 Project Overview":
 elif page == "✨ Predictions":
     st.markdown('<div class="main-header">✨ AI Prediction & Recommendation Engine</div>', unsafe_allow_html=True)
     
-    districts_list = get_all_districts()
+    districts_list = get_all_districts() if BACKEND_AVAILABLE else ["Hyderabad", "Warangal", "Karimnagar", "Nizamabad", "Adilabad"]
 
     # REQUIRED PREDICTION DISCLAIMER (ONLY SHOWS ON THIS PAGE)
     st.markdown("""
@@ -683,28 +583,24 @@ elif page == "✨ Predictions":
     """, unsafe_allow_html=True)
 
     # Master Spot Selector for Integrated All-In-One Spot Analysis
-    all_spots_master = get_spots(district=None)
+    all_spots_master = get_spots(district=None) if BACKEND_AVAILABLE else []
     all_spot_names_master = [s["name"] for s in all_spots_master] if all_spots_master else ["Charminar", "Pakhal Lake & Wildlife Sanctuary", "Ramappa Temple", "Golconda Fort", "Thousand Pillar Temple"]
 
     st.subheader("🎯 Destination Spot Predictor & Explorer")
+    st.caption("Select any tourist spot to generate instant Climate Forecast, Visitor Crowd Volume, Trip Budget, and Interactive Map Analysis.")
+
     p_col1, p_col2, p_col3, p_col4, p_col5 = st.columns(5)
 
-    def on_district_change():
-        if "global_spot_sel" in st.session_state:
-            del st.session_state["global_spot_sel"]
-
     with p_col1:
-        sel_dist_global = st.selectbox(
-            "Filter District",
-            ["All"] + districts_list,
-            key="global_dist_sel",
-            on_change=on_district_change
-        )
+        sel_dist_global = st.selectbox("Filter District", ["All"] + districts_list, key="global_dist_sel")
 
     # Dynamically filter spots based on selected district
-    dist_filter_global = None if normalize_text(sel_dist_global) == "all" else sel_dist_global
-    filtered_master_spots = get_spots(district=dist_filter_global)
-    filtered_spot_names = [s["name"] for s in filtered_master_spots] if filtered_master_spots else all_spot_names_master
+    dist_filter_global = None if sel_dist_global == "All" else sel_dist_global
+    if BACKEND_AVAILABLE:
+        filtered_master_spots = get_spots(district=dist_filter_global)
+        filtered_spot_names = [s["name"] for s in filtered_master_spots] if filtered_master_spots else all_spot_names_master
+    else:
+        filtered_spot_names = all_spot_names_master
 
     with p_col2:
         sel_spot_global = st.selectbox("Select Tourist Spot", filtered_spot_names, key="global_spot_sel")
@@ -753,11 +649,11 @@ elif page == "✨ Predictions":
         with st.spinner(f"Running PyTorch LSTM & XGBoost models for '{sel_spot_global}'..."):
             # 1. Climate
             input_c = ClimateInput(district=spot_dist_global, month=int(sel_month_global), temperature=0.0, humidity=0.0, rainfall=0.0)
-            res_c = predict_climate(input_c)
+            res_c = predict_climate(input_c) if BACKEND_AVAILABLE else {"status": "error"}
 
             # 2. Visitors
             input_v = VisitorInput(place_name=sel_spot_global, district=spot_dist_global, month=int(sel_month_global), season="Monsoon" if sel_month_global in [6,7,8,9] else "Winter")
-            res_v = predict_visitors(input_v)
+            res_v = predict_visitors(input_v) if BACKEND_AVAILABLE else {"status": "error"}
 
             # 3. Budget
             entry_fee_val = float(spot_obj_global["entry_fee"]) if spot_obj_global else 20.0
@@ -773,7 +669,7 @@ elif page == "✨ Predictions":
                 entry_fees_est=entry_fee_val,
                 tolls_and_parking_est=0.0
             )
-            res_b = predict_trip_budget(input_b)
+            res_b = predict_trip_budget(input_b) if BACKEND_AVAILABLE else {"status": "error"}
 
         # RENDER SUMMARY CARDS ON ONE PAGE
         sc1, sc2, sc3 = st.columns(3)
@@ -821,18 +717,19 @@ elif page == "✨ Predictions":
             st.write(f"**Spot Coordinates**: Latitude `{spot_obj_global['lat']}`, Longitude `{spot_obj_global['lon']}`")
             st.map(pd.DataFrame([{"lat": spot_obj_global['lat'], "lon": spot_obj_global['lon'], "name": sel_spot_global}]), zoom=13)
 
-            amenities_g = get_nearby_amenities(spot_name=sel_spot_global, district=spot_dist_global, lat=spot_obj_global['lat'], lon=spot_obj_global['lon'])
-            g_tabs = st.tabs(["🏨 Hotels", "🍽️ Restaurants", "🏧 ATMs", "🏥 Hospitals", "⛽ Fuel Stations"])
-            with g_tabs[0]:
-                st.dataframe(pd.DataFrame(amenities_g.get("hotels", [])))
-            with g_tabs[1]:
-                st.dataframe(pd.DataFrame(amenities_g.get("restaurants", [])))
-            with g_tabs[2]:
-                st.dataframe(pd.DataFrame(amenities_g.get("atms", [])))
-            with g_tabs[3]:
-                st.dataframe(pd.DataFrame(amenities_g.get("hospitals", [])))
-            with g_tabs[4]:
-                st.dataframe(pd.DataFrame(amenities_g.get("petrol_pumps", [])))
+            if BACKEND_AVAILABLE:
+                amenities_g = get_nearby_amenities(spot_name=sel_spot_global, district=spot_dist_global, lat=spot_obj_global['lat'], lon=spot_obj_global['lon'])
+                g_tabs = st.tabs(["🏨 Hotels", "🍽️ Restaurants", "🏧 ATMs", "🏥 Hospitals", "⛽ Fuel Stations"])
+                with g_tabs[0]:
+                    st.dataframe(pd.DataFrame(amenities_g.get("hotels", [])))
+                with g_tabs[1]:
+                    st.dataframe(pd.DataFrame(amenities_g.get("restaurants", [])))
+                with g_tabs[2]:
+                    st.dataframe(pd.DataFrame(amenities_g.get("atms", [])))
+                with g_tabs[3]:
+                    st.dataframe(pd.DataFrame(amenities_g.get("hospitals", [])))
+                with g_tabs[4]:
+                    st.dataframe(pd.DataFrame(amenities_g.get("petrol_pumps", [])))
 
     st.markdown("---")
     st.subheader(f"🔍 Detailed Module Inspection for '{sel_spot_global}' ({spot_dist_global})")
@@ -860,7 +757,7 @@ elif page == "✨ Predictions":
             district=None,
             category=c_filter,
             season=None
-        )
+        ) if BACKEND_AVAILABLE else []
 
         if recs:
             st.markdown(f"#### Top Recommended Destinations Related to **{sel_spot_global}** ({len(recs)} Found)")
@@ -894,7 +791,7 @@ elif page == "✨ Predictions":
             humidity=0.0,
             rainfall=0.0
         )
-        res_c_tab = predict_climate(input_c_tab)
+        res_c_tab = predict_climate(input_c_tab) if BACKEND_AVAILABLE else {"status": "error"}
 
         if res_c_tab.get("status") == "success":
             st.markdown(f"### 🌡️ Weather Trends for **{sel_spot_global}** in Month `{sel_month_global}`")
@@ -1005,7 +902,7 @@ elif page == "✨ Predictions":
             season=season_v_tab
         )
 
-        res_v_tab = predict_visitors(input_v_tab)
+        res_v_tab = predict_visitors(input_v_tab) if BACKEND_AVAILABLE else {"status": "error"}
 
         if res_v_tab.get("status") == "success":
             st.markdown(f"### 👥 Visitor Volume & Density for **{sel_spot_global}**")
@@ -1050,7 +947,7 @@ elif page == "✨ Predictions":
             tolls_and_parking_est=0.0
         )
 
-        res_b_tab = predict_trip_budget(input_b_tab)
+        res_b_tab = predict_trip_budget(input_b_tab) if BACKEND_AVAILABLE else {"status": "error"}
 
         if res_b_tab.get("status") == "success":
             st.success(f"✅ Budget Estimation for '{sel_spot_global}'")
@@ -1079,7 +976,7 @@ elif page == "✨ Predictions":
             import json
             import streamlit.components.v1 as components
 
-            amenities = get_nearby_amenities(spot_name=sel_spot_global, district=spot_dist_global, lat=spot_obj_global['lat'], lon=spot_obj_global['lon'])
+            amenities = get_nearby_amenities(spot_name=sel_spot_global, district=spot_dist_global, lat=spot_obj_global['lat'], lon=spot_obj_global['lon']) if BACKEND_AVAILABLE else {}
             
             hotels_list = amenities.get("hotels", [])
             rest_list = amenities.get("restaurants", [])
@@ -1219,27 +1116,12 @@ elif page == "✨ Predictions":
             am_tabs = st.tabs(["🏨 Hotels", "🍽️ Restaurants", "🏧 ATMs & Banks", "🏥 Hospitals", "⛽ Fuel Stations"])
 
             with am_tabs[0]:
-                if hotels_list:
-                    st.dataframe(pd.DataFrame(hotels_list), use_container_width=True)
-                else:
-                    st.info("No nearby hotels found.")
+                st.dataframe(pd.DataFrame(hotels_list))
             with am_tabs[1]:
-                if rest_list:
-                    st.dataframe(pd.DataFrame(rest_list), use_container_width=True)
-                else:
-                    st.info("No nearby restaurants found.")
+                st.dataframe(pd.DataFrame(rest_list))
             with am_tabs[2]:
-                if atms_list:
-                    st.dataframe(pd.DataFrame(atms_list), use_container_width=True)
-                else:
-                    st.info("No nearby ATMs & Banks found.")
+                st.dataframe(pd.DataFrame(atms_list))
             with am_tabs[3]:
-                if hosp_list:
-                    st.dataframe(pd.DataFrame(hosp_list), use_container_width=True)
-                else:
-                    st.info("No nearby hospitals found.")
+                st.dataframe(pd.DataFrame(hosp_list))
             with am_tabs[4]:
-                if fuel_list:
-                    st.dataframe(pd.DataFrame(fuel_list), use_container_width=True)
-                else:
-                    st.info("No nearby fuel stations found.")
+                st.dataframe(pd.DataFrame(fuel_list))
